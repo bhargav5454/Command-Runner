@@ -17,19 +17,33 @@
     "commands": [
       {
         "command": "commandRunner.addSequence",
-        "title": "Command Runner: Add New Sequence"
+        "title": "Command Runner: Add New Sequence",
+        "icon": "$(add)"
       },
       {
         "command": "commandRunner.runSequence",
-        "title": "Command Runner: Run Sequence"
+        "title": "Command Runner: Run Sequence",
+        "icon": "$(play)"
       },
       {
-        "command": "commandRunner.manageSequences",
-        "title": "Command Runner: Manage Sequences"
+        "command": "commandRunner.editSequence",
+        "title": "Command Runner: Edit Sequence",
+        "icon": "$(edit)"
       },
       {
         "command": "commandRunner.deleteSequence",
-        "title": "Command Runner: Delete Sequence"
+        "title": "Command Runner: Delete Sequence",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "commandRunner.runFromStep",
+        "title": "Command Runner: Run From This Step",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "commandRunner.copyStepCommand",
+        "title": "Command Runner: Copy Step Command",
+        "icon": "$(clippy)"
       }
     ],
     "viewsContainers": {
@@ -50,15 +64,43 @@
       ]
     },
     "menus": {
+      "view/title": [
+        {
+          "command": "commandRunner.addSequence",
+          "when": "view == commandSequences",
+          "group": "navigation@1"
+        },
+        {
+          "command": "commandRunner.editSequence",
+          "when": "view == commandSequences",
+          "group": "navigation@2"
+        }
+      ],
       "view/item/context": [
         {
           "command": "commandRunner.runSequence",
-          "when": "view == commandSequences",
+          "when": "view == commandSequences && viewItem == sequence",
           "group": "inline"
         },
         {
+          "command": "commandRunner.editSequence",
+          "when": "view == commandSequences && viewItem == sequence",
+          "group": "navigation"
+        },
+        {
           "command": "commandRunner.deleteSequence",
-          "when": "view == commandSequences"
+          "when": "view == commandSequences && viewItem == sequence",
+          "group": "navigation"
+        },
+        {
+          "command": "commandRunner.runFromStep",
+          "when": "view == commandSequences && viewItem == step",
+          "group": "inline"
+        },
+        {
+          "command": "commandRunner.copyStepCommand",
+          "when": "view == commandSequences && viewItem == step",
+          "group": "navigation"
         }
       ]
     }
