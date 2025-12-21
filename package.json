@@ -1,5 +1,6 @@
 {
   "name": "command-runner",
+  "publisher": "Bhargav",
   "displayName": "Command Runner",
   "description": "Store and run custom command sequences step by step",
   "version": "1.0.0",
