@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 export interface CommandStep {
   directory: string;
   command: string;
-  terminal?: string; // e.g., Default, PowerShell, Git Bash, Bash, Cmd
+  terminal?: string; // e.g., Default, PowerShell, Git Bash, Bash, Cmd, Zsh
   terminalName?: string; // optional custom terminal name to reuse
 }
 
@@ -14,7 +14,9 @@ export interface CommandSequence {
   terminalName?: string;
 }
 
-export class CommandSequenceProvider implements vscode.TreeDataProvider<CommandSequenceItem> {
+export class CommandSequenceProvider
+  implements vscode.TreeDataProvider<CommandSequenceItem>
+{
   private _onDidChangeTreeData: vscode.EventEmitter<
     CommandSequenceItem | undefined | null | void
   > = new vscode.EventEmitter<CommandSequenceItem | undefined | null | void>();
@@ -91,6 +93,18 @@ export class CommandSequenceProvider implements vscode.TreeDataProvider<CommandS
     await this.context.globalState.update("commandSequences", filtered);
     this.refresh();
   }
+
+  // Get a sequence by name
+  getSequence(name: string): CommandSequence | undefined {
+    const sequences = this.getSequences();
+    return sequences.find((s) => s.name === name);
+  }
+
+  // Check if a sequence with the given name exists
+  sequenceExists(name: string): boolean {
+    const sequences = this.getSequences();
+    return sequences.some((s) => s.name === name);
+  }
 }
 
 export class CommandSequenceItem extends vscode.TreeItem {
@@ -103,7 +117,12 @@ export class CommandSequenceItem extends vscode.TreeItem {
     super(label, collapsibleState);
 
     if ("steps" in sequence) {
-      this.tooltip = `${sequence.steps.length} steps`;
+      // This is a sequence
+      const seq = sequence as CommandSequence;
+      const terminalInfo = seq.terminal
+        ? ` [${seq.terminal}]`
+        : " [Default Terminal]";
+      this.tooltip = `${seq.steps.length} step${seq.steps.length !== 1 ? "s" : ""}${terminalInfo}\n\nClick to run this sequence`;
       this.contextValue = "sequence";
       this.iconPath = new vscode.ThemeIcon("list-ordered");
       this.command = {
@@ -112,18 +131,17 @@ export class CommandSequenceItem extends vscode.TreeItem {
         arguments: [this],
       };
     } else {
+      // This is a step
       const step = sequence as CommandStep;
-      this.tooltip =
-        `cd ${step.directory} && ${step.command}` +
-        (step.terminal
-          ? `\nTerminal: ${step.terminal}${step.terminalName ? " (" + step.terminalName + ")" : ""}`
-          : "");
+      const terminalInfo = step.terminal
+        ? `\nTerminal: ${step.terminal}${step.terminalName ? " (" + step.terminalName + ")" : ""}`
+        : "";
+      this.tooltip = `📁 ${step.directory}\n⚡ ${step.command}${terminalInfo}\n\nClick to run from this step`;
       this.contextValue = "step";
       this.iconPath = new vscode.ThemeIcon("terminal");
-      // Clicking a step will run from this step immediately
       this.command = {
         command: "commandRunner.runFromStep",
-        title: "Run Step",
+        title: "Run From This Step",
         arguments: [this],
       };
     }

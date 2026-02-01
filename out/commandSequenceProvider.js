@@ -81,6 +81,16 @@ class CommandSequenceProvider {
         await this.context.globalState.update("commandSequences", filtered);
         this.refresh();
     }
+    // Get a sequence by name
+    getSequence(name) {
+        const sequences = this.getSequences();
+        return sequences.find((s) => s.name === name);
+    }
+    // Check if a sequence with the given name exists
+    sequenceExists(name) {
+        const sequences = this.getSequences();
+        return sequences.some((s) => s.name === name);
+    }
 }
 exports.CommandSequenceProvider = CommandSequenceProvider;
 class CommandSequenceItem extends vscode.TreeItem {
@@ -91,7 +101,12 @@ class CommandSequenceItem extends vscode.TreeItem {
         this.collapsibleState = collapsibleState;
         this.parentSequenceName = parentSequenceName;
         if ("steps" in sequence) {
-            this.tooltip = `${sequence.steps.length} steps`;
+            // This is a sequence
+            const seq = sequence;
+            const terminalInfo = seq.terminal
+                ? ` [${seq.terminal}]`
+                : " [Default Terminal]";
+            this.tooltip = `${seq.steps.length} step${seq.steps.length !== 1 ? "s" : ""}${terminalInfo}\n\nClick to run this sequence`;
             this.contextValue = "sequence";
             this.iconPath = new vscode.ThemeIcon("list-ordered");
             this.command = {
@@ -101,18 +116,17 @@ class CommandSequenceItem extends vscode.TreeItem {
             };
         }
         else {
+            // This is a step
             const step = sequence;
-            this.tooltip =
-                `cd ${step.directory} && ${step.command}` +
-                    (step.terminal
-                        ? `\nTerminal: ${step.terminal}${step.terminalName ? " (" + step.terminalName + ")" : ""}`
-                        : "");
+            const terminalInfo = step.terminal
+                ? `\nTerminal: ${step.terminal}${step.terminalName ? " (" + step.terminalName + ")" : ""}`
+                : "";
+            this.tooltip = `📁 ${step.directory}\n⚡ ${step.command}${terminalInfo}\n\nClick to run from this step`;
             this.contextValue = "step";
             this.iconPath = new vscode.ThemeIcon("terminal");
-            // Clicking a step will run from this step immediately
             this.command = {
                 command: "commandRunner.runFromStep",
-                title: "Run Step",
+                title: "Run From This Step",
                 arguments: [this],
             };
         }
