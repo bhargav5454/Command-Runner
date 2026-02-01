@@ -4,6 +4,14 @@
   "displayName": "Command Runner",
   "description": "Store and run custom command sequences step by step",
   "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Bhargav/command-runner.git"
+  },
+  "homepage": "https://github.com/Bhargav/command-runner#readme",
+  "bugs": {
+    "url": "https://github.com/Bhargav/command-runner/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -104,6 +112,29 @@
           "group": "navigation"
         }
       ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Command Runner",
+      "properties": {
+        "commandRunner.preferredShell": {
+          "type": "string",
+          "enum": [
+            "Default",
+            "PowerShell",
+            "Git Bash",
+            "Bash",
+            "Cmd"
+          ],
+          "default": "Default",
+          "description": "Preferred shell when creating new terminals. Users may still choose another shell at run-time."
+        },
+        "commandRunner.gitBashPath": {
+          "type": "string",
+          "default": "C:\\Program Files\\Git\\bin\\bash.exe",
+          "description": "Full path to Git Bash executable on Windows (optional)."
+        }
+      }
     }
   },
   "scripts": {
@@ -111,7 +142,9 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "package:vsix": "npx @vscode/vsce@latest package",
+    "package:vsix:dist": "node -e \"require('fs').mkdirSync('dist', { recursive: true })\" && npx @vscode/vsce@latest package --out dist/command-runner.vsix"
   },
   "devDependencies": {
     "@types/node": "18.x",
