@@ -63,67 +63,70 @@ class CommandExecutor {
             return;
         }
         const rootPath = workspaceFolder.uri.fsPath;
-        // Check for preferred shell from configuration and offer to use it
-        const preferred = vscode.workspace
-            .getConfiguration("commandRunner")
-            .get("preferredShell") || "Default";
-        let terminal;
-        let selectedShell;
-        if (preferred && preferred !== "Default") {
-            const usePreferred = await vscode.window.showQuickPick(["Yes", "No"], {
-                placeHolder: `Use preferred shell: ${preferred}?`,
-            });
-            if (usePreferred === "Yes") {
-                selectedShell = preferred;
-                const termName = `${sequence.name} [${selectedShell}]`;
-                terminal = this.ensureTerminal(termName, selectedShell);
+        // Decide terminal choices based on sequence/step configuration or prompt once
+        const defaultTerminalChoice = sequence.terminal;
+        const defaultTerminalName = sequence.terminalName;
+        const anyStepHasTerminal = sequence.steps.some((s) => s.terminal !== undefined);
+        // If no defaults are present, we'll ask the user once for a terminal to use for the whole run
+        let userPickedShell;
+        let userPickedTerminalName;
+        const needInteractivePick = !defaultTerminalChoice && !anyStepHasTerminal;
+        if (needInteractivePick) {
+            // Offer preferred shell first
+            const preferred = vscode.workspace
+                .getConfiguration("commandRunner")
+                .get("preferredShell") || "Default";
+            if (preferred && preferred !== "Default") {
+                const usePreferred = await vscode.window.showQuickPick(["Yes", "No"], {
+                    placeHolder: `Use preferred shell: ${preferred}?`,
+                });
+                if (usePreferred === "Yes") {
+                    userPickedShell = preferred;
+                    userPickedTerminalName = `${sequence.name} [${userPickedShell}]`;
+                }
             }
-        }
-        if (!terminal) {
-            // Ask user which terminal to use/create
-            const choices = [
-                {
-                    label: "New: Default",
-                    description: "Create a new terminal using the default shell",
-                },
-                {
-                    label: "New: PowerShell",
-                    description: "Create a new PowerShell terminal (pwsh/powershell)",
-                },
-                {
-                    label: "New: Git Bash",
-                    description: "Create a new Git Bash terminal (if installed)",
-                },
-                { label: "New: Bash", description: "Create a new Bash terminal" },
-                {
-                    label: "New: Cmd",
-                    description: "Create a new Command Prompt terminal (cmd.exe)",
-                },
-            ];
-            const existing = vscode.window.terminals.map((t) => ({
-                label: t.name,
-                description: "Existing terminal",
-            }));
-            const pick = await vscode.window.showQuickPick([...choices, ...existing], {
-                placeHolder: "Select terminal (or choose an existing one)",
-            });
-            if (!pick) {
-                vscode.window.showInformationMessage("Run cancelled — no terminal selected");
-                return;
-            }
-            if (pick.description === "Existing terminal") {
-                const found = vscode.window.terminals.find((t) => t.name === pick.label);
-                if (!found) {
-                    vscode.window.showErrorMessage("Selected terminal not found");
+            if (!userPickedShell) {
+                const choices = [
+                    {
+                        label: "New: Default",
+                        description: "Create a new terminal using the default shell",
+                    },
+                    {
+                        label: "New: PowerShell",
+                        description: "Create a new PowerShell terminal (pwsh/powershell)",
+                    },
+                    {
+                        label: "New: Git Bash",
+                        description: "Create a new Git Bash terminal (if installed)",
+                    },
+                    { label: "New: Bash", description: "Create a new Bash terminal" },
+                    {
+                        label: "New: Cmd",
+                        description: "Create a new Command Prompt terminal (cmd.exe)",
+                    },
+                ];
+                const existing = vscode.window.terminals.map((t) => ({
+                    label: t.name,
+                    description: "Existing terminal",
+                }));
+                const pick = await vscode.window.showQuickPick([...choices, ...existing], { placeHolder: "Select terminal (or choose an existing one)" });
+                if (!pick) {
+                    vscode.window.showInformationMessage("Run cancelled — no terminal selected");
                     return;
                 }
-                terminal = found;
-            }
-            else {
-                // New terminal requested
-                selectedShell = pick.label.replace("New: ", "").trim();
-                const termName = `${sequence.name} [${selectedShell}]`;
-                terminal = this.ensureTerminal(termName, selectedShell);
+                if (pick.description === "Existing terminal") {
+                    const found = vscode.window.terminals.find((t) => t.name === pick.label);
+                    if (!found) {
+                        vscode.window.showErrorMessage("Selected terminal not found");
+                        return;
+                    }
+                    userPickedTerminalName = pick.label; // reuse existing terminal name
+                    userPickedShell = undefined; // unknown shell, but terminal name will be used
+                }
+                else {
+                    userPickedShell = pick.label.replace("New: ", "").trim();
+                    userPickedTerminalName = `${sequence.name} [${userPickedShell}]`;
+                }
             }
         }
         await vscode.window.withProgress({
@@ -150,8 +153,19 @@ class CommandExecutor {
                 if (!path.isAbsolute(targetDir)) {
                     targetDir = path.join(rootPath, targetDir);
                 }
+                // Determine terminal choice for this step (step overrides sequence; interactive pick is fallback)
+                const stepTerminalChoice = step.terminal ??
+                    defaultTerminalChoice ??
+                    userPickedShell;
+                const stepTerminalName = step.terminalName ??
+                    defaultTerminalName ??
+                    userPickedTerminalName;
+                const termLabel = stepTerminalName
+                    ? stepTerminalName
+                    : `${sequence.name}${stepTerminalChoice ? " [" + stepTerminalChoice + "]" : ""}`;
+                const terminalForStep = this.ensureTerminal(termLabel, stepTerminalChoice);
                 // Send commands to terminal
-                terminal.sendText(`cd "${targetDir}"`);
+                terminalForStep.sendText(`cd "${targetDir}"`);
                 // Update progress and status bar
                 progress.report({
                     message: `Step ${stepNumber}/${total}: ${step.command}`,
@@ -159,8 +173,8 @@ class CommandExecutor {
                 });
                 this.statusBar.text = `$(play) Command Runner: ${sequence.name} (${stepNumber}/${total})`;
                 // Add error handling wrapper for the command
-                const wrappedCommand = this.wrapCommandWithErrorHandling(step.command, stepNumber, selectedShell);
-                terminal.sendText(wrappedCommand);
+                const wrappedCommand = this.wrapCommandWithErrorHandling(step.command, stepNumber, stepTerminalChoice);
+                terminalForStep.sendText(wrappedCommand);
                 // Show progress notification
                 vscode.window.showInformationMessage(`Running step ${stepNumber}/${total}: ${step.command}`);
             }

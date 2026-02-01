@@ -1,101 +1,122 @@
-import * as vscode from 'vscode';
-import { CommandSequence, CommandSequenceProvider } from './commandSequenceProvider';
+import * as vscode from "vscode";
+import {
+  CommandSequence,
+  CommandSequenceProvider,
+} from "./commandSequenceProvider";
 
 export class SequenceEditorManager {
-    public static currentPanel: SequenceEditorManager | undefined;
-    private readonly _panel: vscode.WebviewPanel;
-    private readonly _extensionUri: vscode.Uri;
-    private _disposables: vscode.Disposable[] = [];
+  public static currentPanel: SequenceEditorManager | undefined;
+  private readonly _panel: vscode.WebviewPanel;
+  private readonly _extensionUri: vscode.Uri;
+  private _disposables: vscode.Disposable[] = [];
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, private provider: CommandSequenceProvider, private initialSequence?: CommandSequence) {
-        this._panel = panel;
-        this._extensionUri = extensionUri;
+  private constructor(
+    panel: vscode.WebviewPanel,
+    extensionUri: vscode.Uri,
+    private provider: CommandSequenceProvider,
+    private initialSequence?: CommandSequence,
+  ) {
+    this._panel = panel;
+    this._extensionUri = extensionUri;
 
-        this._update();
+    this._update();
 
-        this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+    this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
-        this._panel.webview.onDidReceiveMessage(
-            async (message) => {
-                switch (message.type) {
-                    case 'save': {
-                        const newSeq: CommandSequence = message.sequence;
-                        const oldName: string | undefined = message.oldName;
-                        if (oldName && oldName !== newSeq.name) {
-                            await this.provider.deleteSequence(oldName);
-                        }
-                        await this.provider.saveSequence(newSeq);
-                        vscode.window.showInformationMessage(`Saved sequence "${newSeq.name}" with ${newSeq.steps.length} steps`);
-                        this._panel.dispose();
-                        break;
-                    }
-                    case 'cancel': {
-                        this._panel.dispose();
-                        break;
-                    }
-                    case 'error': {
-                        vscode.window.showErrorMessage(message.message);
-                        break;
-                    }
-                }
-            },
-            null,
-            this._disposables
-        );
-    }
-
-    public static createOrShow(extensionUri: vscode.Uri, provider: CommandSequenceProvider, initial?: CommandSequence) {
-        const column = vscode.window.activeTextEditor
-            ? vscode.window.activeTextEditor.viewColumn
-            : undefined;
-
-        // If we already have a panel, show it.
-        // Note: We allow multiple editors if they are for different sequences or new sequences.
-        // But for simplicity, let's keep one active for now or check if we want to allow multiple.
-        // The current implementation allows one global 'currentPanel'. 
-        // Let's change this to allow multiple if they are editing different things, but for now sticking to the pattern.
-        
-        if (SequenceEditorManager.currentPanel) {
-            SequenceEditorManager.currentPanel._panel.reveal(column);
-            return;
-        }
-
-        const panel = vscode.window.createWebviewPanel(
-            'sequenceEditor',
-            initial ? `Edit Sequence: ${initial.name}` : 'Add New Sequence',
-            column || vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')]
+    this._panel.webview.onDidReceiveMessage(
+      async (message) => {
+        switch (message.type) {
+          case "save": {
+            const newSeq: CommandSequence = message.sequence;
+            const oldName: string | undefined = message.oldName;
+            if (oldName && oldName !== newSeq.name) {
+              await this.provider.deleteSequence(oldName);
             }
-        );
-
-        SequenceEditorManager.currentPanel = new SequenceEditorManager(panel, extensionUri, provider, initial);
-    }
-
-    public dispose() {
-        SequenceEditorManager.currentPanel = undefined;
-
-        this._panel.dispose();
-
-        while (this._disposables.length) {
-            const x = this._disposables.pop();
-            if (x) {
-                x.dispose();
-            }
+            await this.provider.saveSequence(newSeq);
+            vscode.window.showInformationMessage(
+              `Saved sequence "${newSeq.name}" with ${newSeq.steps.length} steps`,
+            );
+            this._panel.dispose();
+            break;
+          }
+          case "cancel": {
+            this._panel.dispose();
+            break;
+          }
+          case "error": {
+            vscode.window.showErrorMessage(message.message);
+            break;
+          }
         }
+      },
+      null,
+      this._disposables,
+    );
+  }
+
+  public static createOrShow(
+    extensionUri: vscode.Uri,
+    provider: CommandSequenceProvider,
+    initial?: CommandSequence,
+  ) {
+    const column = vscode.window.activeTextEditor
+      ? vscode.window.activeTextEditor.viewColumn
+      : undefined;
+
+    // If we already have a panel, show it.
+    // Note: We allow multiple editors if they are for different sequences or new sequences.
+    // But for simplicity, let's keep one active for now or check if we want to allow multiple.
+    // The current implementation allows one global 'currentPanel'.
+    // Let's change this to allow multiple if they are editing different things, but for now sticking to the pattern.
+
+    if (SequenceEditorManager.currentPanel) {
+      SequenceEditorManager.currentPanel._panel.reveal(column);
+      return;
     }
 
-    private _update() {
-        const webview = this._panel.webview;
-        this._panel.webview.html = this._getHtmlForWebview(webview);
+    const panel = vscode.window.createWebviewPanel(
+      "sequenceEditor",
+      initial ? `Edit Sequence: ${initial.name}` : "Add New Sequence",
+      column || vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        localResourceRoots: [vscode.Uri.joinPath(extensionUri, "media")],
+      },
+    );
+
+    SequenceEditorManager.currentPanel = new SequenceEditorManager(
+      panel,
+      extensionUri,
+      provider,
+      initial,
+    );
+  }
+
+  public dispose() {
+    SequenceEditorManager.currentPanel = undefined;
+
+    this._panel.dispose();
+
+    while (this._disposables.length) {
+      const x = this._disposables.pop();
+      if (x) {
+        x.dispose();
+      }
     }
+  }
 
-    private _getHtmlForWebview(webview: vscode.Webview): string {
-        const nonce = getNonce();
-        const initialData = this.initialSequence ? JSON.stringify(this.initialSequence) : 'null';
+  private _update() {
+    const webview = this._panel.webview;
+    this._panel.webview.html = this._getHtmlForWebview(webview);
+  }
 
-        return `<!DOCTYPE html>
+  private _getHtmlForWebview(webview: vscode.Webview): string {
+    const nonce = getNonce();
+    const initialData = this.initialSequence
+      ? JSON.stringify(this.initialSequence)
+      : "null";
+
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -305,6 +326,17 @@ export class SequenceEditorManager {
         <input type="text" id="seqName" placeholder="e.g., Build and Deploy" />
     </div>
 
+    <div class="form-group">
+        <label for="defaultTerminal">Default Terminal</label>
+        <select id="defaultTerminal">
+            <option>Default</option>
+            <option>PowerShell</option>
+            <option>Git Bash</option>
+            <option>Bash</option>
+            <option>Cmd</option>
+        </select>
+    </div>
+
     <div class="steps-container">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <label style="margin: 0;">Command Steps</label>
@@ -330,7 +362,8 @@ export class SequenceEditorManager {
         
         let state = {
             name: initialData ? initialData.name : '',
-            steps: initialData ? initialData.steps : []
+            steps: initialData ? initialData.steps : [],
+            defaultTerminal: initialData ? (initialData.terminal || 'Default') : 'Default'
         };
         
         const oldName = initialData ? initialData.name : undefined;
@@ -421,8 +454,40 @@ export class SequenceEditorManager {
                     cmdGroup.appendChild(cmdLabel);
                     cmdGroup.appendChild(cmdInput);
 
+                    // Terminal selection for this step (optional)
+                    const termGroup = document.createElement('div');
+                    termGroup.className = 'field-group';
+                    const termLabel = document.createElement('label');
+                    termLabel.textContent = 'Terminal (optional)';
+                    const termSelect = document.createElement('select');
+                    ['Default', 'PowerShell', 'Git Bash', 'Bash', 'Cmd'].forEach(opt => {
+                        const o = document.createElement('option');
+                        o.value = opt;
+                        o.textContent = opt;
+                        termSelect.appendChild(o);
+                    });
+                    termSelect.value = step.terminal || state.defaultTerminal || 'Default';
+                    termSelect.onchange = (e) => updateStep(index, 'terminal', e.target.value);
+                    termGroup.appendChild(termLabel);
+                    termGroup.appendChild(termSelect);
+
+                    // Terminal name (to reuse or identify)
+                    const tnameGroup = document.createElement('div');
+                    tnameGroup.className = 'field-group';
+                    const tnameLabel = document.createElement('label');
+                    tnameLabel.textContent = 'Terminal Name (optional)';
+                    const tnameInput = document.createElement('input');
+                    tnameInput.type = 'text';
+                    tnameInput.value = step.terminalName || '';
+                    tnameInput.placeholder = '';
+                    tnameInput.oninput = (e) => updateStep(index, 'terminalName', e.target.value);
+                    tnameGroup.appendChild(tnameLabel);
+                    tnameGroup.appendChild(tnameInput);
+
                     content.appendChild(dirGroup);
                     content.appendChild(cmdGroup);
+                    content.appendChild(termGroup);
+                    content.appendChild(tnameGroup);
 
                     li.appendChild(header);
                     li.appendChild(content);
@@ -442,7 +507,7 @@ export class SequenceEditorManager {
         function addStep() {
             const lastStep = state.steps[state.steps.length - 1];
             const newDir = lastStep ? lastStep.directory : '.';
-            state.steps.push({ directory: newDir, command: '' });
+            state.steps.push({ directory: newDir, command: '', terminal: state.defaultTerminal || 'Default', terminalName: '' });
             renderSteps();
             // Scroll to bottom
             setTimeout(() => {
@@ -517,7 +582,11 @@ export class SequenceEditorManager {
             }
             
             state.name = name;
-            vscode.postMessage({ type: 'save', sequence: state, oldName });
+            // Attach default terminal settings to top-level sequence for convenience
+            const seqToSave = Object.assign({}, state);
+            seqToSave.terminal = state.defaultTerminal;
+            delete seqToSave.defaultTerminal;
+            vscode.postMessage({ type: 'save', sequence: seqToSave, oldName });
         });
 
         cancelBtn.addEventListener('click', () => {
@@ -530,14 +599,15 @@ export class SequenceEditorManager {
     </script>
 </body>
 </html>`;
-    }
+  }
 }
 
 function getNonce() {
-    let text = '';
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
+  let text = "";
+  const possible =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  for (let i = 0; i < 32; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
 }
