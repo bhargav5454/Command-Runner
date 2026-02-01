@@ -2,13 +2,35 @@
   "name": "command-runner",
   "publisher": "Bhargav",
   "displayName": "Command Runner",
-  "description": "Store and run custom command sequences step by step",
-  "version": "1.0.0",
+  "description": "Store and run custom command sequences step by step with multiple terminal support",
+  "version": "2.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Bhargav/command-runner.git"
+  },
+  "homepage": "https://github.com/Bhargav/command-runner#readme",
+  "bugs": {
+    "url": "https://github.com/Bhargav/command-runner/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Debuggers",
+    "Machine Learning",
+    "Visualization"
+  ],
+  "keywords": [
+    "terminal",
+    "commands",
+    "sequence",
+    "automation",
+    "build",
+    "script",
+    "powershell",
+    "bash",
+    "git bash"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -18,33 +40,81 @@
     "commands": [
       {
         "command": "commandRunner.addSequence",
-        "title": "Command Runner: Add New Sequence",
-        "icon": "$(add)"
+        "title": "Add New Sequence",
+        "icon": "$(add)",
+        "category": "Command Runner"
       },
       {
         "command": "commandRunner.runSequence",
-        "title": "Command Runner: Run Sequence",
-        "icon": "$(play)"
+        "title": "Run Sequence",
+        "icon": "$(play)",
+        "category": "Command Runner"
+      },
+      {
+        "command": "commandRunner.runAllSequences",
+        "title": "Run All Sequences",
+        "icon": "$(run-all)",
+        "category": "Command Runner"
       },
       {
         "command": "commandRunner.editSequence",
-        "title": "Command Runner: Edit Sequence",
-        "icon": "$(edit)"
+        "title": "Edit Sequence",
+        "icon": "$(edit)",
+        "category": "Command Runner"
       },
       {
         "command": "commandRunner.deleteSequence",
-        "title": "Command Runner: Delete Sequence",
-        "icon": "$(trash)"
+        "title": "Delete Sequence",
+        "icon": "$(trash)",
+        "category": "Command Runner"
+      },
+      {
+        "command": "commandRunner.duplicateSequence",
+        "title": "Duplicate Sequence",
+        "icon": "$(copy)",
+        "category": "Command Runner"
       },
       {
         "command": "commandRunner.runFromStep",
-        "title": "Command Runner: Run From This Step",
-        "icon": "$(debug-start)"
+        "title": "Run From This Step",
+        "icon": "$(debug-start)",
+        "category": "Command Runner"
       },
       {
         "command": "commandRunner.copyStepCommand",
-        "title": "Command Runner: Copy Step Command",
-        "icon": "$(clippy)"
+        "title": "Copy Step Command",
+        "icon": "$(clippy)",
+        "category": "Command Runner"
+      },
+      {
+        "command": "commandRunner.manageSequences",
+        "title": "Manage Sequences",
+        "icon": "$(list-flat)",
+        "category": "Command Runner"
+      },
+      {
+        "command": "commandRunner.exportSequences",
+        "title": "Export Sequences",
+        "icon": "$(export)",
+        "category": "Command Runner"
+      },
+      {
+        "command": "commandRunner.importSequences",
+        "title": "Import Sequences",
+        "icon": "$(file-add)",
+        "category": "Command Runner"
+      },
+      {
+        "command": "commandRunner.refreshView",
+        "title": "Refresh View",
+        "icon": "$(refresh)",
+        "category": "Command Runner"
+      },
+      {
+        "command": "commandRunner.showOutput",
+        "title": "Show Output",
+        "icon": "$(output)",
+        "category": "Command Runner"
       }
     ],
     "viewsContainers": {
@@ -72,38 +142,146 @@
           "group": "navigation@1"
         },
         {
-          "command": "commandRunner.editSequence",
+          "command": "commandRunner.runAllSequences",
           "when": "view == commandSequences",
           "group": "navigation@2"
+        },
+        {
+          "command": "commandRunner.refreshView",
+          "when": "view == commandSequences",
+          "group": "navigation@3"
+        },
+        {
+          "command": "commandRunner.importSequences",
+          "when": "view == commandSequences",
+          "group": "2_importexport@1"
+        },
+        {
+          "command": "commandRunner.exportSequences",
+          "when": "view == commandSequences",
+          "group": "2_importexport@2"
         }
       ],
       "view/item/context": [
         {
           "command": "commandRunner.runSequence",
           "when": "view == commandSequences && viewItem == sequence",
-          "group": "inline"
+          "group": "inline@1"
         },
         {
           "command": "commandRunner.editSequence",
           "when": "view == commandSequences && viewItem == sequence",
-          "group": "navigation"
+          "group": "1_edit@1"
+        },
+        {
+          "command": "commandRunner.duplicateSequence",
+          "when": "view == commandSequences && viewItem == sequence",
+          "group": "1_edit@2"
         },
         {
           "command": "commandRunner.deleteSequence",
           "when": "view == commandSequences && viewItem == sequence",
-          "group": "navigation"
+          "group": "2_delete@1"
         },
         {
           "command": "commandRunner.runFromStep",
           "when": "view == commandSequences && viewItem == step",
-          "group": "inline"
+          "group": "inline@1"
         },
         {
           "command": "commandRunner.copyStepCommand",
           "when": "view == commandSequences && viewItem == step",
-          "group": "navigation"
+          "group": "1_copy@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "commandRunner.addSequence",
+          "group": "Command Runner@1"
+        },
+        {
+          "command": "commandRunner.runSequence",
+          "group": "Command Runner@2"
+        },
+        {
+          "command": "commandRunner.runAllSequences",
+          "group": "Command Runner@3"
+        },
+        {
+          "command": "commandRunner.editSequence",
+          "group": "Command Runner@4"
+        },
+        {
+          "command": "commandRunner.deleteSequence",
+          "group": "Command Runner@5"
+        },
+        {
+          "command": "commandRunner.duplicateSequence",
+          "group": "Command Runner@6"
+        },
+        {
+          "command": "commandRunner.manageSequences",
+          "group": "Command Runner@7"
+        },
+        {
+          "command": "commandRunner.exportSequences",
+          "group": "Command Runner@8"
+        },
+        {
+          "command": "commandRunner.importSequences",
+          "group": "Command Runner@9"
+        },
+        {
+          "command": "commandRunner.refreshView",
+          "group": "Command Runner@10"
+        },
+        {
+          "command": "commandRunner.showOutput",
+          "group": "Command Runner@11"
         }
       ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Command Runner",
+      "properties": {
+        "commandRunner.preferredShell": {
+          "type": "string",
+          "enum": [
+            "Default",
+            "PowerShell",
+            "Git Bash",
+            "Bash",
+            "Zsh",
+            "Cmd"
+          ],
+          "enumDescriptions": [
+            "Use VS Code's default terminal shell",
+            "PowerShell (pwsh/powershell.exe)",
+            "Git Bash (Windows) or bash",
+            "Unix Bash shell",
+            "Zsh shell",
+            "Windows Command Prompt (cmd.exe)"
+          ],
+          "default": "Default",
+          "description": "Preferred shell when creating new terminals. Users may still choose another shell at run-time."
+        },
+        "commandRunner.gitBashPath": {
+          "type": "string",
+          "default": "C:\\Program Files\\Git\\bin\\bash.exe",
+          "description": "Full path to Git Bash executable on Windows (optional)."
+        },
+        "commandRunner.stopOnError": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically stop sequence execution when a command fails."
+        },
+        "commandRunner.showNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notification messages for sequence progress."
+        }
+      }
     }
   },
   "scripts": {
@@ -111,7 +289,9 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "package:vsix": "npx @vscode/vsce@latest package",
+    "package:vsix:dist": "node -e \"require('fs').mkdirSync('dist', { recursive: true })\" && npx @vscode/vsce@latest package --out dist/command-runner.vsix"
   },
   "devDependencies": {
     "@types/node": "18.x",

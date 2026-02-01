@@ -50,10 +50,10 @@ class CommandSequenceProvider {
     getChildren(element) {
         if (!element) {
             const sequences = this.getSequences();
-            return Promise.resolve(sequences.map(seq => new CommandSequenceItem(seq.name, seq, vscode.TreeItemCollapsibleState.Collapsed)));
+            return Promise.resolve(sequences.map((seq) => new CommandSequenceItem(seq.name, seq, vscode.TreeItemCollapsibleState.Collapsed)));
         }
         else {
-            if ('steps' in element.sequence) {
+            if ("steps" in element.sequence) {
                 const seq = element.sequence;
                 return Promise.resolve(seq.steps.map((step, index) => new CommandSequenceItem(`${index + 1}. ${step.command}`, step, vscode.TreeItemCollapsibleState.None, seq.name)));
             }
@@ -61,25 +61,35 @@ class CommandSequenceProvider {
         }
     }
     getSequences() {
-        return this.context.globalState.get('commandSequences', []);
+        return this.context.globalState.get("commandSequences", []);
     }
     async saveSequence(sequence) {
         const sequences = this.getSequences();
-        const existingIndex = sequences.findIndex(s => s.name === sequence.name);
+        const existingIndex = sequences.findIndex((s) => s.name === sequence.name);
         if (existingIndex >= 0) {
             sequences[existingIndex] = sequence;
         }
         else {
             sequences.push(sequence);
         }
-        await this.context.globalState.update('commandSequences', sequences);
+        await this.context.globalState.update("commandSequences", sequences);
         this.refresh();
     }
     async deleteSequence(sequenceName) {
         const sequences = this.getSequences();
-        const filtered = sequences.filter(s => s.name !== sequenceName);
-        await this.context.globalState.update('commandSequences', filtered);
+        const filtered = sequences.filter((s) => s.name !== sequenceName);
+        await this.context.globalState.update("commandSequences", filtered);
         this.refresh();
+    }
+    // Get a sequence by name
+    getSequence(name) {
+        const sequences = this.getSequences();
+        return sequences.find((s) => s.name === name);
+    }
+    // Check if a sequence with the given name exists
+    sequenceExists(name) {
+        const sequences = this.getSequences();
+        return sequences.some((s) => s.name === name);
     }
 }
 exports.CommandSequenceProvider = CommandSequenceProvider;
@@ -90,20 +100,35 @@ class CommandSequenceItem extends vscode.TreeItem {
         this.sequence = sequence;
         this.collapsibleState = collapsibleState;
         this.parentSequenceName = parentSequenceName;
-        if ('steps' in sequence) {
-            this.tooltip = `${sequence.steps.length} steps`;
-            this.contextValue = 'sequence';
-            this.iconPath = new vscode.ThemeIcon('list-ordered');
+        if ("steps" in sequence) {
+            // This is a sequence
+            const seq = sequence;
+            const terminalInfo = seq.terminal
+                ? ` [${seq.terminal}]`
+                : " [Default Terminal]";
+            this.tooltip = `${seq.steps.length} step${seq.steps.length !== 1 ? "s" : ""}${terminalInfo}\n\nClick to run this sequence`;
+            this.contextValue = "sequence";
+            this.iconPath = new vscode.ThemeIcon("list-ordered");
             this.command = {
-                command: 'commandRunner.runSequence',
-                title: 'Run Sequence',
-                arguments: [this]
+                command: "commandRunner.runSequence",
+                title: "Run Sequence",
+                arguments: [this],
             };
         }
         else {
-            this.tooltip = `cd ${sequence.directory} && ${sequence.command}`;
-            this.contextValue = 'step';
-            this.iconPath = new vscode.ThemeIcon('terminal');
+            // This is a step
+            const step = sequence;
+            const terminalInfo = step.terminal
+                ? `\nTerminal: ${step.terminal}${step.terminalName ? " (" + step.terminalName + ")" : ""}`
+                : "";
+            this.tooltip = `📁 ${step.directory}\n⚡ ${step.command}${terminalInfo}\n\nClick to run from this step`;
+            this.contextValue = "step";
+            this.iconPath = new vscode.ThemeIcon("terminal");
+            this.command = {
+                command: "commandRunner.runFromStep",
+                title: "Run From This Step",
+                arguments: [this],
+            };
         }
     }
 }

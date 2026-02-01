@@ -46,7 +46,7 @@ class SequenceEditorManager {
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
         this._panel.webview.onDidReceiveMessage(async (message) => {
             switch (message.type) {
-                case 'save': {
+                case "save": {
                     const newSeq = message.sequence;
                     const oldName = message.oldName;
                     if (oldName && oldName !== newSeq.name) {
@@ -57,11 +57,11 @@ class SequenceEditorManager {
                     this._panel.dispose();
                     break;
                 }
-                case 'cancel': {
+                case "cancel": {
                     this._panel.dispose();
                     break;
                 }
-                case 'error': {
+                case "error": {
                     vscode.window.showErrorMessage(message.message);
                     break;
                 }
@@ -72,23 +72,17 @@ class SequenceEditorManager {
         const column = vscode.window.activeTextEditor
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
-        // If we already have a panel, show it.
-        // Note: We allow multiple editors if they are for different sequences or new sequences.
-        // But for simplicity, let's keep one active for now or check if we want to allow multiple.
-        // The current implementation allows one global 'currentPanel'. 
-        // Let's change this to allow multiple if they are editing different things, but for now sticking to the pattern.
-        if (SequenceEditorManager.currentPanel) {
-            SequenceEditorManager.currentPanel._panel.reveal(column);
-            return;
-        }
-        const panel = vscode.window.createWebviewPanel('sequenceEditor', initial ? `Edit Sequence: ${initial.name}` : 'Add New Sequence', column || vscode.ViewColumn.One, {
+        const panelId = initial
+            ? `sequenceEditor-${initial.name}`
+            : `sequenceEditor-new-${Date.now()}`;
+        const panel = vscode.window.createWebviewPanel(panelId, initial ? `Edit: ${initial.name}` : "New Sequence", column || vscode.ViewColumn.One, {
             enableScripts: true,
-            localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')]
+            retainContextWhenHidden: true,
+            localResourceRoots: [vscode.Uri.joinPath(extensionUri, "media")],
         });
-        SequenceEditorManager.currentPanel = new SequenceEditorManager(panel, extensionUri, provider, initial);
+        new SequenceEditorManager(panel, extensionUri, provider, initial);
     }
     dispose() {
-        SequenceEditorManager.currentPanel = undefined;
         this._panel.dispose();
         while (this._disposables.length) {
             const x = this._disposables.pop();
@@ -103,125 +97,167 @@ class SequenceEditorManager {
     }
     _getHtmlForWebview(webview) {
         const nonce = getNonce();
-        const initialData = this.initialSequence ? JSON.stringify(this.initialSequence) : 'null';
+        const initialData = this.initialSequence
+            ? JSON.stringify(this.initialSequence)
+            : "null";
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Use a content security policy to only allow loading specific resources in the webview -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sequence Editor</title>
     <style>
         :root {
-            --container-paddding: 20px;
-            --input-padding-vertical: 6px;
-            --input-padding-horizontal: 8px;
-            --input-margin-vertical: 4px;
-            --input-margin-horizontal: 0;
+            --gap-sm: 8px;
+            --gap-md: 16px;
+            --gap-lg: 24px;
+            --radius: 4px;
         }
+
+        * { box-sizing: border-box; }
 
         body {
             font-family: var(--vscode-font-family);
-            color: var(--vscode-editor-foreground);
+            color: var(--vscode-foreground);
             background-color: var(--vscode-editor-background);
-            padding: var(--container-paddding);
+            padding: 0;
             margin: 0;
+            line-height: 1.5;
         }
 
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            padding-bottom: 80px; /* Space for sticky footer */
+        }
+
+        /* Typography */
         h1 {
-            font-size: 1.2rem;
+            font-size: 18px;
             font-weight: 500;
-            margin-bottom: 20px;
+            margin: 0 0 24px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--vscode-settings-headerBorder);
         }
 
-        .form-group {
-            margin-bottom: 20px;
+        h2 {
+            font-size: 14px;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin: 32px 0 16px 0;
+            opacity: 0.8;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
+        /* Form Elements */
         label {
             display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
+            margin-bottom: 6px;
+            font-size: 13px;
+            font-weight: 500;
             color: var(--vscode-input-placeholderForeground);
         }
 
-        input[type="text"] {
+        input[type="text"], select {
             width: 100%;
-            padding: var(--input-padding-vertical) var(--input-padding-horizontal);
+            padding: 7px 10px;
             background-color: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
             border: 1px solid var(--vscode-input-border);
             border-radius: 2px;
+            font-family: inherit;
+            font-size: 13px;
             outline: none;
-            box-sizing: border-box;
         }
 
-        input[type="text"]:focus {
+        input[type="text"]:focus, select:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+            border-color: var(--vscode-focusBorder);
+        }
+        
+        input::placeholder {
+            color: var(--vscode-input-placeholderForeground);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: var(--gap-md);
+            margin-bottom: var(--gap-md);
+        }
+        
+        .full-width { grid-column: 1 / -1; }
+
+        /* Step Cards */
+        .step-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .step-card {
+            background-color: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-widget-border);
+            border-radius: var(--radius);
+            display: flex;
+            flex-direction: column;
+            transition: border-color 0.2s;
+            position: relative;
+        }
+
+        .step-card:hover {
             border-color: var(--vscode-focusBorder);
         }
 
-        .steps-container {
-            margin-top: 20px;
-        }
-
-        .step-list {
-            list-style-type: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .step-item {
-            background-color: var(--vscode-editor-inactiveSelectionBackground);
-            border: 1px solid var(--vscode-widget-border);
-            border-radius: 4px;
-            padding: 12px;
-            margin-bottom: 12px;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .step-item.dragging {
+        .step-card.dragging {
             opacity: 0.5;
             border-style: dashed;
         }
 
         .step-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-            cursor: move;
-        }
-
-        .step-title {
-            font-weight: 600;
+            background-color: var(--vscode-sideBar-background);
+            padding: 8px 12px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            border-bottom: 1px solid var(--vscode-widget-border);
+            border-radius: var(--radius) var(--radius) 0 0;
+            gap: 10px;
         }
 
         .drag-handle {
             cursor: grab;
-            color: var(--vscode-foreground);
+            color: var(--vscode-icon-foreground);
             opacity: 0.6;
+            display: flex;
+            align-items: center;
         }
+        
+        .drag-handle:hover { opacity: 1; }
 
-        .drag-handle:hover {
-            opacity: 1;
+        .step-title {
+            font-weight: 600;
+            font-size: 12px;
+            flex: 1;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .step-actions {
             display: flex;
-            gap: 8px;
+            gap: 4px;
         }
 
         .icon-btn {
-            background: none;
+            background: transparent;
             border: none;
-            color: var(--vscode-foreground);
+            color: var(--vscode-icon-foreground);
             cursor: pointer;
             padding: 4px;
             border-radius: 4px;
@@ -233,43 +269,60 @@ class SequenceEditorManager {
         .icon-btn:hover {
             background-color: var(--vscode-toolbar-hoverBackground);
         }
-
+        
         .icon-btn.delete:hover {
             color: var(--vscode-errorForeground);
         }
 
-        .step-content {
+        .step-body {
+            padding: 16px;
             display: grid;
-            grid-template-columns: 1fr 2fr;
+            grid-template-columns: 1fr 1fr;
             gap: 12px;
         }
 
-        .field-group {
+        .input-group {
             display: flex;
             flex-direction: column;
         }
 
-        .field-group label {
-            font-size: 0.85rem;
-            margin-bottom: 4px;
+        /* SVG Icons */
+        svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
         }
-
-        .actions-bar {
-            margin-top: 24px;
+        
+        /* Sticky Footer */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 16px 20px;
+            background-color: var(--vscode-editor-background);
+            border-top: 1px solid var(--vscode-widget-border);
             display: flex;
             gap: 12px;
-            padding-top: 16px;
-            border-top: 1px solid var(--vscode-widget-border);
+            z-index: 10;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+        }
+
+        button.primary, button.secondary {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 2px;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: inherit;
         }
 
         button.primary {
             background-color: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
-            border: none;
-            padding: 8px 16px;
-            border-radius: 2px;
-            cursor: pointer;
-            font-weight: 500;
         }
 
         button.primary:hover {
@@ -279,58 +332,103 @@ class SequenceEditorManager {
         button.secondary {
             background-color: var(--vscode-button-secondaryBackground);
             color: var(--vscode-button-secondaryForeground);
-            border: none;
-            padding: 8px 16px;
-            border-radius: 2px;
-            cursor: pointer;
         }
 
         button.secondary:hover {
             background-color: var(--vscode-button-secondaryHoverBackground);
         }
 
+        .spacer { flex: 1; }
+
         .empty-state {
             text-align: center;
-            padding: 30px;
+            padding: 40px;
             color: var(--vscode-descriptionForeground);
             border: 1px dashed var(--vscode-widget-border);
-            border-radius: 4px;
-            margin-bottom: 12px;
+            border-radius: var(--radius);
         }
 
-        /* SVG Icons */
-        .icon {
-            width: 16px;
-            height: 16px;
-            fill: currentColor;
+        .helper-text {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+            margin-top: 4px;
         }
     </style>
 </head>
 <body>
-    <h1 id="page-title"></h1>
-    
-    <div class="form-group">
-        <label for="seqName">Sequence Name</label>
-        <input type="text" id="seqName" placeholder="e.g., Build and Deploy" />
-    </div>
+    <svg style="display:none">
+        <symbol id="icon-add" viewBox="0 0 16 16"><path d="M14 7v1H8v6H7V8H1V7h6V1h1v6h6z"/></symbol>
+        <symbol id="icon-trash" viewBox="0 0 16 16"><path d="M11 1.5v1h3.5v1h-14v-1h3.5v-1h7zm-9 3h11v10h-11v-10zm2 2v6h1v-6h-1zm4 0v6h1v-6h-1z"/></symbol>
+        <symbol id="icon-save" viewBox="0 0 16 16"><path d="M12.91 2.38L11.53 1H2.5A1.5 1.5 0 0 0 1 2.5V14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4.57a1 1 0 0 0-.29-.71l-1.8-1.48zM5 2h5v3H5V2zM3 2.5a.5.5 0 0 1 .5-.5h.5v4h7v-4h.34l1.66 1.37V14a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V2.5zM12 13H4v-4h8v4z"/></symbol>
+        <symbol id="icon-close" viewBox="0 0 16 16"><path d="M8 7.29L2.35 1.65 1.65 2.35 7.29 8l-5.64 5.65.7.7L8 8.71l5.65 5.64.7-.7L8.71 8l5.64-5.65-.7-.7L8 7.29z"/></symbol>
+        <symbol id="icon-arrow-up" viewBox="0 0 16 16"><path d="M3.5 8.5l4.5-4.5 4.5 4.5-.7.71L8.5 5.92V14H7.5V5.92L4.21 9.21 3.5 8.5zM8 1h1v2H8V1z"/></symbol>
+        <symbol id="icon-arrow-down" viewBox="0 0 16 16"><path d="M3.5 7.5l4.5 4.5 4.5-4.5-.7-.71L8.5 10.08V2H7.5v8.08L4.21 6.79 3.5 7.5zM8 15h1v-2H8v2z"/></symbol>
+        <symbol id="icon-drag" viewBox="0 0 16 16"><path d="M6 4h1V2H6v2zm0 5h1V7H6v2zm0 5h1v-2H6v2zM9 4h1V2H9v2zm0 5h1V7H9v2zm0 5h1v-2H9v2z"/></symbol>
+        <symbol id="icon-terminal" viewBox="0 0 16 16"><path d="M2 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H2zm12 10H2V4h12v8zM4 6h2v1H4V6zm0 2h4v1H4V8z"/></symbol>
+        <symbol id="icon-folder" viewBox="0 0 16 16"><path d="M7 2l2 2h5v9H2V2h5zM2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1h-4.5L7 1H2z"/></symbol>
+        <symbol id="icon-play" viewBox="0 0 16 16"><path d="M3 2l10 6-10 6z"/></symbol>
+        <symbol id="icon-settings" viewBox="0 0 16 16"><path d="M9.1 13.4l.7-.7-1.1-3 1.4-1.4 3 1.1.7-.7-1.8-4.2-4.2-1.8-.7.7 1.1 3-1.4 1.4-3-1.1-.7.7 1.8 4.2 4.2 1.8zM4.6 6.1l2.5 1-1.5 1.5-1-2.5zm6.8 3.8l-2.5-1 1.5-1.5 1 2.5z"/></symbol>
+    </svg>
 
-    <div class="steps-container">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <label style="margin: 0;">Command Steps</label>
-            <button id="addStepBtn" class="secondary" style="font-size: 0.9rem; padding: 4px 10px;">+ Add Step</button>
+    <div class="container">
+        <h1 id="page-title">
+            <svg><use href="#icon-settings"></use></svg>
+            <span>Command Sequence Editor</span>
+        </h1>
+
+        <div class="form-grid">
+            <div class="input-group">
+                <label for="seqName">Sequence Name</label>
+                <input type="text" id="seqName" placeholder="e.g. Build and Deploy Project" />
+            </div>
+            <div class="input-group">
+                <label>Terminal Strategy</label>
+                <select id="defaultTerminal">
+                    <option value="Default">VS Code Default</option>
+                    <option value="PowerShell">PowerShell</option>
+                    <option value="Git Bash">Git Bash</option>
+                    <option value="Bash">Bash</option>
+                    <option value="Zsh">Zsh</option>
+                    <option value="Cmd">Command Prompt</option>
+                </select>
+            </div>
+            <div class="input-group full-width">
+                <label for="terminalName">Shared Terminal Name <span style="font-weight:400; opacity:0.7">(Optional)</span></label>
+                <input type="text" id="terminalName" placeholder="e.g. My Build Task" />
+                <div class="helper-text">If set, all steps will reuse this specific terminal instance.</div>
+            </div>
         </div>
-        
+
+        <h2>
+            <span>Execution Steps</span>
+            <span id="stepCount" style="font-weight:400; font-size:12px; opacity:0.7">0 Steps</span>
+        </h2>
+
         <div id="stepsList" class="step-list">
-            <!-- Steps will be injected here -->
-        </div>
-        <div id="emptyState" class="empty-state" style="display: none;">
-            No steps added yet. Click "Add Step" to begin.
+            </div>
+
+        <div id="emptyState" class="empty-state" style="display:none">
+            <div style="margin-bottom:12px; opacity:0.5"><svg style="width:32px; height:32px"><use href="#icon-play"></use></svg></div>
+            <div>No commands defined yet.</div>
+            <div style="margin-top:12px">
+                <button id="addStepBtnEmpty" class="secondary" style="margin: 0 auto">
+                    <svg><use href="#icon-add"></use></svg> Add First Step
+                </button>
+            </div>
         </div>
     </div>
 
-    <div class="actions-bar">
-        <button id="saveBtn" class="primary">Save Sequence</button>
-        <button id="cancelBtn" class="secondary">Cancel</button>
+    <div class="footer">
+        <button id="addStepBtn" class="secondary">
+            <svg><use href="#icon-add"></use></svg> Add Step
+        </button>
+        <div class="spacer"></div>
+        <button id="cancelBtn" class="secondary">
+            <svg><use href="#icon-close"></use></svg> Cancel
+        </button>
+        <button id="saveBtn" class="primary">
+            <svg><use href="#icon-save"></use></svg> Save Sequence
+        </button>
     </div>
 
     <script nonce="${nonce}">
@@ -339,125 +437,191 @@ class SequenceEditorManager {
         
         let state = {
             name: initialData ? initialData.name : '',
-            steps: initialData ? initialData.steps : []
+            steps: initialData ? initialData.steps : [],
+            defaultTerminal: initialData ? (initialData.terminal || 'Default') : 'Default',
+            terminalName: initialData ? (initialData.terminalName || '') : ''
         };
         
         const oldName = initialData ? initialData.name : undefined;
 
         // Elements
-        const pageTitle = document.getElementById('page-title');
         const seqNameInput = document.getElementById('seqName');
+        const defaultTerminalSelect = document.getElementById('defaultTerminal');
+        const terminalNameInput = document.getElementById('terminalName');
         const stepsList = document.getElementById('stepsList');
         const emptyState = document.getElementById('emptyState');
+        const stepCount = document.getElementById('stepCount');
+        
+        // Buttons
         const addStepBtn = document.getElementById('addStepBtn');
+        const addStepBtnEmpty = document.getElementById('addStepBtnEmpty');
         const saveBtn = document.getElementById('saveBtn');
         const cancelBtn = document.getElementById('cancelBtn');
 
-        // Initialization
         function init() {
-            pageTitle.textContent = initialData ? 'Edit Command Sequence' : 'Create New Command Sequence';
             seqNameInput.value = state.name;
+            defaultTerminalSelect.value = state.defaultTerminal;
+            terminalNameInput.value = state.terminalName;
             renderSteps();
         }
 
-        // Render Steps
         function renderSteps() {
             stepsList.innerHTML = '';
+            stepCount.textContent = state.steps.length + ' Step' + (state.steps.length !== 1 ? 's' : '');
             
             if (state.steps.length === 0) {
                 emptyState.style.display = 'block';
+                stepsList.style.display = 'none';
             } else {
                 emptyState.style.display = 'none';
+                stepsList.style.display = 'flex';
                 state.steps.forEach((step, index) => {
-                    const li = document.createElement('div');
-                    li.className = 'step-item';
-                    li.draggable = true;
-                    li.dataset.index = index;
-
-                    // Header
-                    const header = document.createElement('div');
-                    header.className = 'step-header';
-                    
-                    const title = document.createElement('div');
-                    title.className = 'step-title';
-                    title.innerHTML = \`
-                        <span class="drag-handle" title="Drag to reorder">
-                            <svg class="icon" viewBox="0 0 16 16"><path d="M10 13a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm-4 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm-4 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm8-4a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm-4 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm-4 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm8-4a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm-4 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm-4 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>
-                        </span>
-                        Step \${index + 1}
-                    \`;
-
-                    const actions = document.createElement('div');
-                    actions.className = 'step-actions';
-                    
-                    const deleteBtn = document.createElement('button');
-                    deleteBtn.className = 'icon-btn delete';
-                    deleteBtn.title = 'Remove Step';
-                    deleteBtn.innerHTML = '<svg class="icon" viewBox="0 0 16 16"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.75 1.75 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>';
-                    deleteBtn.onclick = () => removeStep(index);
-
-                    actions.appendChild(deleteBtn);
-                    header.appendChild(title);
-                    header.appendChild(actions);
-
-                    // Content
-                    const content = document.createElement('div');
-                    content.className = 'step-content';
-
-                    // Directory Input
-                    const dirGroup = document.createElement('div');
-                    dirGroup.className = 'field-group';
-                    const dirLabel = document.createElement('label');
-                    dirLabel.textContent = 'Directory';
-                    const dirInput = document.createElement('input');
-                    dirInput.type = 'text';
-                    dirInput.value = step.directory;
-                    dirInput.placeholder = '.';
-                    dirInput.oninput = (e) => updateStep(index, 'directory', e.target.value);
-                    dirGroup.appendChild(dirLabel);
-                    dirGroup.appendChild(dirInput);
-
-                    // Command Input
-                    const cmdGroup = document.createElement('div');
-                    cmdGroup.className = 'field-group';
-                    const cmdLabel = document.createElement('label');
-                    cmdLabel.textContent = 'Command';
-                    const cmdInput = document.createElement('input');
-                    cmdInput.type = 'text';
-                    cmdInput.value = step.command;
-                    cmdInput.placeholder = 'npm install';
-                    cmdInput.oninput = (e) => updateStep(index, 'command', e.target.value);
-                    cmdGroup.appendChild(cmdLabel);
-                    cmdGroup.appendChild(cmdInput);
-
-                    content.appendChild(dirGroup);
-                    content.appendChild(cmdGroup);
-
-                    li.appendChild(header);
-                    li.appendChild(content);
-
-                    // Drag Events
-                    li.addEventListener('dragstart', handleDragStart);
-                    li.addEventListener('dragover', handleDragOver);
-                    li.addEventListener('drop', handleDrop);
-                    li.addEventListener('dragend', handleDragEnd);
-
-                    stepsList.appendChild(li);
+                    stepsList.appendChild(createStepElement(step, index));
                 });
             }
         }
 
-        // State Management
+        function createStepElement(step, index) {
+            const card = document.createElement('div');
+            card.className = 'step-card';
+            card.draggable = true;
+            card.dataset.index = index;
+
+            // Header
+            const header = document.createElement('div');
+            header.className = 'step-header';
+            
+            const dragHandle = document.createElement('div');
+            dragHandle.className = 'drag-handle';
+            dragHandle.title = 'Drag to reorder';
+            dragHandle.innerHTML = '<svg><use href="#icon-drag"></use></svg>';
+            
+            const title = document.createElement('div');
+            title.className = 'step-title';
+            title.textContent = 'Step ' + (index + 1);
+            
+            const actions = document.createElement('div');
+            actions.className = 'step-actions';
+            
+            // Reorder Buttons (for keyboard/accessibility users mainly, but useful visually)
+            if (index > 0) {
+                const upBtn = document.createElement('button');
+                upBtn.className = 'icon-btn';
+                upBtn.title = 'Move Up';
+                upBtn.innerHTML = '<svg><use href="#icon-arrow-up"></use></svg>';
+                upBtn.onclick = () => moveStep(index, index - 1);
+                actions.appendChild(upBtn);
+            }
+            if (index < state.steps.length - 1) {
+                const downBtn = document.createElement('button');
+                downBtn.className = 'icon-btn';
+                downBtn.title = 'Move Down';
+                downBtn.innerHTML = '<svg><use href="#icon-arrow-down"></use></svg>';
+                downBtn.onclick = () => moveStep(index, index + 1);
+                actions.appendChild(downBtn);
+            }
+            
+            const delBtn = document.createElement('button');
+            delBtn.className = 'icon-btn delete';
+            delBtn.title = 'Delete Step';
+            delBtn.innerHTML = '<svg><use href="#icon-trash"></use></svg>';
+            delBtn.onclick = () => removeStep(index);
+            
+            actions.appendChild(delBtn);
+            header.appendChild(dragHandle);
+            header.appendChild(title);
+            header.appendChild(actions);
+
+            // Body
+            const body = document.createElement('div');
+            body.className = 'step-body';
+
+            // Row 1: Command (Full Width)
+            const cmdGroup = document.createElement('div');
+            cmdGroup.className = 'input-group full-width';
+            cmdGroup.style.marginBottom = '12px';
+            const cmdLabel = document.createElement('label');
+            cmdLabel.innerHTML = 'Command';
+            const cmdInput = document.createElement('input');
+            cmdInput.type = 'text';
+            cmdInput.value = step.command;
+            cmdInput.placeholder = 'e.g. npm install';
+            cmdInput.oninput = (e) => updateStep(index, 'command', e.target.value);
+            cmdGroup.appendChild(cmdLabel);
+            cmdGroup.appendChild(cmdInput);
+
+            // Row 2: Directory
+            const dirGroup = document.createElement('div');
+            dirGroup.className = 'input-group';
+            const dirLabel = document.createElement('label');
+            dirLabel.textContent = 'Directory';
+            const dirInput = document.createElement('input');
+            dirInput.type = 'text';
+            dirInput.value = step.directory;
+            dirInput.placeholder = '.';
+            dirInput.title = 'Use . for workspace root';
+            dirInput.oninput = (e) => updateStep(index, 'directory', e.target.value);
+            dirGroup.appendChild(dirLabel);
+            dirGroup.appendChild(dirInput);
+
+            // Row 2: Terminal
+            const termGroup = document.createElement('div');
+            termGroup.className = 'input-group';
+            const termLabel = document.createElement('label');
+            termLabel.textContent = 'Terminal Override';
+            const termSelect = document.createElement('select');
+            
+            const opts = [
+                {v: '', l: 'Inherit Default'},
+                {v: 'Default', l: 'VS Code Default'},
+                {v: 'PowerShell', l: 'PowerShell'},
+                {v: 'Git Bash', l: 'Git Bash'},
+                {v: 'Bash', l: 'Bash'},
+                {v: 'Zsh', l: 'Zsh'},
+                {v: 'Cmd', l: 'Cmd Prompt'}
+            ];
+            
+            opts.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.v;
+                opt.textContent = o.l;
+                termSelect.appendChild(opt);
+            });
+            termSelect.value = step.terminal || '';
+            termSelect.onchange = (e) => updateStep(index, 'terminal', e.target.value);
+            termGroup.appendChild(termLabel);
+            termGroup.appendChild(termSelect);
+
+            body.appendChild(cmdGroup);
+            body.appendChild(dirGroup);
+            body.appendChild(termGroup);
+
+            card.appendChild(header);
+            card.appendChild(body);
+
+            // Drag Events
+            card.addEventListener('dragstart', handleDragStart);
+            card.addEventListener('dragover', handleDragOver);
+            card.addEventListener('drop', handleDrop);
+            card.addEventListener('dragend', handleDragEnd);
+
+            return card;
+        }
+
+        // Logic
         function addStep() {
             const lastStep = state.steps[state.steps.length - 1];
-            const newDir = lastStep ? lastStep.directory : '.';
-            state.steps.push({ directory: newDir, command: '' });
+            state.steps.push({
+                directory: lastStep ? lastStep.directory : '.',
+                command: '',
+                terminal: ''
+            });
             renderSteps();
-            // Scroll to bottom
             setTimeout(() => {
                 window.scrollTo(0, document.body.scrollHeight);
-                const inputs = stepsList.querySelectorAll('input');
-                if (inputs.length) inputs[inputs.length - 1].focus();
+                const inputs = stepsList.querySelectorAll('input[type="text"]');
+                // Focus the new command input
+                if(inputs.length > 2) inputs[inputs.length - 3].focus(); 
             }, 50);
         }
 
@@ -466,76 +630,87 @@ class SequenceEditorManager {
             renderSteps();
         }
 
+        function moveStep(from, to) {
+            const temp = state.steps[from];
+            state.steps.splice(from, 1);
+            state.steps.splice(to, 0, temp);
+            renderSteps();
+        }
+
         function updateStep(index, field, value) {
             state.steps[index][field] = value;
         }
 
-        // Drag and Drop Logic
-        let dragSrcEl = null;
+        // Drag & Drop
+        let dragSrc = null;
 
         function handleDragStart(e) {
-            this.style.opacity = '0.4';
-            dragSrcEl = this;
+            this.classList.add('dragging');
+            dragSrc = this;
             e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/html', this.innerHTML);
         }
 
         function handleDragOver(e) {
-            if (e.preventDefault) {
-                e.preventDefault();
-            }
+            if (e.preventDefault) e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             return false;
         }
 
         function handleDrop(e) {
-            if (e.stopPropagation) {
-                e.stopPropagation();
-            }
-            
-            if (dragSrcEl !== this) {
-                const srcIndex = parseInt(dragSrcEl.dataset.index);
-                const targetIndex = parseInt(this.dataset.index);
-                
-                // Swap in state
-                const temp = state.steps[srcIndex];
-                state.steps.splice(srcIndex, 1);
-                state.steps.splice(targetIndex, 0, temp);
-                
-                renderSteps();
+            if (e.stopPropagation) e.stopPropagation();
+            if (dragSrc !== this) {
+                const srcIdx = parseInt(dragSrc.dataset.index);
+                const tgtIdx = parseInt(this.dataset.index);
+                moveStep(srcIdx, tgtIdx);
             }
             return false;
         }
 
-        function handleDragEnd(e) {
-            this.style.opacity = '1';
+        function handleDragEnd() {
+            this.classList.remove('dragging');
         }
 
-        // Event Listeners
+        // Listeners
         addStepBtn.addEventListener('click', addStep);
+        addStepBtnEmpty.addEventListener('click', addStep);
         
         saveBtn.addEventListener('click', () => {
             const name = seqNameInput.value.trim();
             if (!name) {
-                vscode.postMessage({ type: 'error', message: 'Sequence name is required' });
+                vscode.postMessage({ type: 'error', message: 'Please provide a Sequence Name' });
+                seqNameInput.focus();
                 return;
             }
+            
+            for (let i = 0; i < state.steps.length; i++) {
+                if (!state.steps[i].command.trim()) {
+                    vscode.postMessage({ type: 'error', message: \`Step \${i + 1} is missing a command\` });
+                    return;
+                }
+            }
+            
             if (state.steps.length === 0) {
                 vscode.postMessage({ type: 'error', message: 'Add at least one step' });
                 return;
             }
-            
+
             state.name = name;
+            state.defaultTerminal = defaultTerminalSelect.value;
+            state.terminalName = terminalNameInput.value.trim();
+
             vscode.postMessage({ type: 'save', sequence: state, oldName });
         });
 
         cancelBtn.addEventListener('click', () => {
             vscode.postMessage({ type: 'cancel' });
         });
+        
+        // Enter key shortcut
+        seqNameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && state.steps.length === 0) addStep();
+        });
 
-        // Initialize
         init();
-
     </script>
 </body>
 </html>`;
@@ -543,8 +718,8 @@ class SequenceEditorManager {
 }
 exports.SequenceEditorManager = SequenceEditorManager;
 function getNonce() {
-    let text = '';
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let text = "";
+    const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     for (let i = 0; i < 32; i++) {
         text += possible.charAt(Math.floor(Math.random() * possible.length));
     }

@@ -1,0 +1,12 @@
+# Exclude source and development files
+src/
+.vscode/
+.github/
+node_modules/
+*.ts
+*.map
+dist/
+coverage/
+*.log
+npm-debug.log*
+.DS_Store
